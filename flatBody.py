@@ -18,11 +18,13 @@ class FlatBody:
         self.rotationalVelocity = 0
 
         self.IS_STATIC = isStatic
+        #this is to insure there is no negative or zero mass 
+        mass = max(mass, 1)
         self.MASS = mass
         if isStatic: self.INVERSE_MASS = 0
         else: self.INVERSE_MASS = 1/mass
         #restitution = relative speed after collision/relative speed before collision ie. bounciness
-        self.restitution = 0.5
+        self.restitution = random.random()
         
         self.RADIUS = radius
         self.WIDTH = width
@@ -66,8 +68,9 @@ class FlatBody:
             newVertices.append(newVertex)
         return newVertices
 
-    def physic_update(self, tickPerSec:int):
-        accleration = self.force/self.MASS
+    def physic_update(self, tickPerSec:int, gravity: Vector2):
+        if self.IS_STATIC: gravity = Vector2()
+        accleration = self.force/self.MASS + gravity
         self.velocity += accleration/tickPerSec
         self.push_body(self.velocity/tickPerSec)
         self.rotate_body(self.rotationalVelocity/tickPerSec)

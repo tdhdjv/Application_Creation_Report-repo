@@ -14,17 +14,15 @@ class Game:
 
         self.clock = pygame.time.Clock()
 
-        self.world = World()
-        self.world.create_randomBodies(30, self.windowSize)
+        self.world = World(pygame.Vector2(self.windowSize))
 
     def run(self):
         while True:
             self.screen.fill((0,0,0))
 
             self.world.render(self.screen)
-            self.world.step(self.tickPerSecond)
-            self.world.control_body()
-            
+            self.world.step(self.tickPerSecond, 5)
+            self.world.player_input(self.tickPerSecond)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
