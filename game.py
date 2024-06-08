@@ -1,15 +1,17 @@
 import pygame
 import sys
+import time
 
 from world import World
 
 class Game:
     def __init__(self) -> None:
         pygame.init()
-
         pygame.display.set_caption('physic engine')
         self.windowSize = (649, 480)
-        self.tickPerSecond = 60
+        self.tickPerSecond = 30
+        self.subSteps = 10
+        self.MAX_SUB_STEP = 10
         self.screen = pygame.display.set_mode(self.windowSize)
 
         self.clock = pygame.time.Clock()
@@ -21,7 +23,11 @@ class Game:
             self.screen.fill((0,0,0))
 
             self.world.render(self.screen)
-            self.world.step(self.tickPerSecond, 5)
+            previouseTime = time.time()
+            self.world.step(self.tickPerSecond, self.subSteps)
+            deltaTime = max(0.0001,(time.time()-previouseTime))
+            self.subSteps = self.subSteps/(deltaTime*self.tickPerSecond)
+            self.subSteps = int(min(max(1, self.subSteps), self.MAX_SUB_STEP))
             self.world.player_input(self.tickPerSecond)
 
             for event in pygame.event.get():

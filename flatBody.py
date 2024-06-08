@@ -1,6 +1,7 @@
 import pygame
 import random
 import math
+import camera
 from pygame import Vector2, SurfaceType
 from enum import Enum
 
@@ -9,7 +10,6 @@ class ShapeType(Enum):
     Box = 2
 COLOR_OPTIONS = ['red', 'white' ,'green', 'yellow']
 class FlatBody:
-
     def __init__(self, position:Vector2, mass:float, width:float, height: float, radius: float, shapeType:ShapeType, isStatic = False) -> None:
         self.position = position
         self.velocity = Vector2()
@@ -33,11 +33,14 @@ class FlatBody:
         self.shapeType = shapeType
 
         if self.shapeType == ShapeType.Box:
+            self.aabb = FlatAABB(-width/2, width/2, -height/2, height/2, position)
+            self.transformedAABB = self.aabb
             self.vertices = create_vectices(width, height)
             self._transformedVertices = self.vertices
             #the triangle indices has to be accending order!!!
             self.triangleIndices = [(0,1,2), (0,2,3)]
         else:
+            self.aabb = FlatAABB(-radius, radius, -radius, radius, position)
             self.vertices = []
             self._transformedVertices = []
             self.triangleIndices = []
@@ -50,12 +53,33 @@ class FlatBody:
             self.color = random.sample(COLOR_OPTIONS, 1)[0]
             self.outLine = 'white'
     
+    def get_transformedAABB(self):
+        if self.transformUpdateNeeded:
+            self.transform_aabb()
+        self.transformedAABB.position = self.position
+        return self.transformedAABB
+    
     def get_transformedVertices(self) -> list:
         if self.transformUpdateNeeded:
             self._transformedVertices = self.transform_vertices()
             self.transformUpdateNeeded = False
         return self._transformedVertices
     
+    def transform_aabb(self):
+        minX = math.inf
+        minY = math.inf
+        maxX = -math.inf
+        maxY = -math.inf
+        for vertex in self.get_transformedVertices():
+            minX = min(minX, vertex.x)
+            minY = min(minY, vertex.y)
+            maxX = max(maxX, vertex.x)
+            maxY = max(maxY, vertex.y)
+        self.transformedAABB.minX = minX
+        self.transformedAABB.maxX = maxX
+        self.transformedAABB.minY = minY
+        self.transformedAABB.maxY = maxY
+        
     def transform_vertices(self):
         sine = math.sin(self.rotation)
         cosine = math.cos(self.rotation)
@@ -89,13 +113,17 @@ class FlatBody:
         self.position = pos
         self.transformUpdateNeeded = True
 
-    def render(self, display:SurfaceType, pixelPerMeter:int) -> None:
+    def render(self, display:SurfaceType, pixelPerMeter:int, camera: camera.Camera) -> None:
         if self.shapeType == ShapeType.Box:
-            pygame.draw.polygon(display, self.color, [worldvertex*pixelPerMeter for worldvertex in self.get_transformedVertices()])
-            pygame.draw.polygon(display, self.outLine, [worldvertex*pixelPerMeter for worldvertex in self.get_transformedVertices()], width=1)
+            newVertices = [worldvertex*pixelPerMeter+camera.position for worldvertex in self.get_transformedVertices()]
+            pygame.draw.polygon(display, self.color, newVertices)
+            pygame.draw.polygon(display, self.outLine, newVertices, width=1)
         else:
-            pygame.draw.circle(display, self.color, self.position*pixelPerMeter, self.RADIUS*pixelPerMeter)
-            pygame.draw.circle(display, self.outLine, self.position*pixelPerMeter, self.RADIUS*pixelPerMeter, width=1)
+            pos = self.position*pixelPerMeter+camera.position
+            if pos.x < 0:
+                return
+            pygame.draw.circle(display, self.color, pos, self.RADIUS*pixelPerMeter)
+            pygame.draw.circle(display, self.outLine, pos, self.RADIUS*pixelPerMeter, width=1)
     
 def create_circle(position:Vector2, mass:float, radius: float, isStatic = False) -> FlatBody:
     return FlatBody(position, mass, 0, 0, radius, ShapeType.Circle, isStatic)
@@ -110,3 +138,10 @@ def create_vectices(width: float, height:float) -> list:
     vertices = [Vector2(left, top),Vector2(right, top),Vector2(right, bottom),Vector2(left, bottom)]
     return vertices
     
+class FlatAABB:
+    def __init__(self, minX:float, maxX:float, minY:float, maxY:float, position:Vector2) -> None:
+        self.minX = minX
+        self.maxX = maxX
+        self.minY = minY
+        self.maxY = maxY
+        self.position = position

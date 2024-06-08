@@ -30,11 +30,12 @@ class World:
 
     def render(self, display:SurfaceType):
         for body in self.flatBodies:
-            body.render(display, self.pixelsPerMeter)
+            body.render(display, self.pixelsPerMeter, self.camera)
 
     def player_input(self, tickPerSecond):
         keys = pygame.key.get_pressed()
         mouse = pygame.mouse.get_pressed()
+        cameraMove = Vector2()
 
         if mouse[0] and not self.mousePrevious[0]:
             body = flatBody.create_box(self.screen_to_world(Vector2(pygame.mouse.get_pos())), 1, 1, 1)
@@ -51,6 +52,15 @@ class World:
             self.pixelsPerMeter = self.zoom * self.DEFAULT_PPM
         if keys[pygame.K_p]:
             self.debug()
+        if keys[pygame.K_UP]:
+            cameraMove += Vector2(0,1)
+        if keys[pygame.K_DOWN]:
+            cameraMove += Vector2(0,-1)
+        if keys[pygame.K_RIGHT]:
+            cameraMove += Vector2(-1,0)
+        if keys[pygame.K_LEFT]:
+            cameraMove += Vector2(1,0)
+        self.camera.position += cameraMove*self.pixelsPerMeter/tickPerSecond*10
         self.control_body(keys)
         self.mousePrevious = mouse
 
@@ -60,6 +70,7 @@ class World:
             self.previousTime = time.time()
             self.FPS = self.tempFPS
             self.tempFPS = 0
+        collides = []
         for _ in range(subStep):
             for body in self.flatBodies:
                 body.physic_update(tickPerSecond*subStep, self.GRAVITY)
@@ -68,10 +79,16 @@ class World:
             flatBodies = self.flatBodies
             for i in range(len(flatBodies)-1):
                 bodyA = flatBodies[i]
+                aabbA = bodyA.aabb
                 for j in range(i+1, len(flatBodies)):
                     bodyB = flatBodies[j]
-                    collide = self.get_collide(bodyA, bodyB)
-                    if (bodyA.IS_STATIC and bodyB.IS_STATIC) or collide == None:
+                    aabbB = bodyB.aabb
+                    if not collision.collideAABB(aabbA, aabbB):
+                        continue
+                    if bodyA.IS_STATIC and bodyB.IS_STATIC:
+                        continue
+                    collide = collision.get_collide(bodyA, bodyB)
+                    if collide == None:
                         continue
                     if bodyA.IS_STATIC:
                         bodyB.push_body(collide)
@@ -81,43 +98,16 @@ class World:
                     else:
                         bodyA.push_body(-collide/2)
                         bodyB.push_body(collide/2)
-                    self.resolve_collision(collide, bodyA, bodyB)
+                    collides.append((collide, bodyA, bodyB))
+        for collideInfo in collides:
+            collide = collideInfo[0]
+            bodyA = collideInfo[1]
+            bodyB = collideInfo[2]
+            collision.resolve_collision(collide, bodyA, bodyB)
         
         for body in self.flatBodies:
             self.void_bodyPos(body)
             #self.wrap_bodyPos(body)
-        
-    def resolve_collision(self, collide:Vector2, bodyA:FlatBody, bodyB:FlatBody):
-        normal = collide.normalize()
-        relativeVelocity = bodyB.velocity-bodyA.velocity
-        
-        if relativeVelocity.dot(normal) > 0:
-            return
-        #the minium restitution
-        e = min(bodyA.restitution, bodyB.restitution)
-        j = -(1+e)*normal.dot(relativeVelocity)
-        j /=  bodyA.INVERSE_MASS + bodyB.INVERSE_MASS
-
-        #impluse = the change in momentum
-        impluse = j * normal
-
-        bodyA.velocity -= impluse * bodyA.INVERSE_MASS
-        bodyB.velocity += impluse * bodyB.INVERSE_MASS 
-    def get_collide(self, bodyA:FlatBody, bodyB: FlatBody):
-        if bodyA.shapeType == ShapeType.Box and bodyB.shapeType == ShapeType.Box:
-            collide = collision.intersect_poly(bodyA.get_transformedVertices(), bodyB.get_transformedVertices())
-        elif bodyA.shapeType == ShapeType.Circle and bodyB.shapeType == ShapeType.Circle:
-            collide = collision.intersect_circle(bodyA.position, bodyA.RADIUS, bodyB.position, bodyB.RADIUS)
-        elif bodyA.shapeType == ShapeType.Box and bodyB.shapeType == ShapeType.Circle:
-            collide = collision.intersect_poly_circle(bodyB.position, bodyB.RADIUS, bodyA.get_transformedVertices())
-        elif bodyB.shapeType == ShapeType.Box and bodyA.shapeType == ShapeType.Circle:
-            #the directions has to be swaped since the relations between A and B is swaped if this is not done 
-            #then collision will be resolved in the opposite direction leading to shutters
-            collide = collision.intersect_poly_circle(bodyA.position, bodyA.RADIUS, bodyB.get_transformedVertices())
-            if collide != None:
-                collide = -collide
-        return collide
-
 
     def create_randomBodies(self, num:int):
         flatBodies = self.flatBodies
@@ -160,10 +150,10 @@ class World:
         body.position.y = body.position.y % self.bound.y
 
     def world_to_screen(self, world_pos:Vector2):
-        return world_pos*self.pixelsPerMeter
+        return (world_pos+self.camera.position)*self.pixelsPerMeter
     
     def screen_to_world(self, screen_pos:Vector2):
-        return screen_pos/self.pixelsPerMeter
+        return (screen_pos - self.camera.position)/self.pixelsPerMeter
 
     def debug(self):
         print(f"FPS: {self.FPS}")
