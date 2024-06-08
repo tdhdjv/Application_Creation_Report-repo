@@ -75,7 +75,7 @@ class World:
         flatBodies = self.flatBodies
         
         for _ in range(num):
-            isStatic = False#random.randint(0,1) == 0
+            isStatic = random.randint(0,2) == 0
             pos = Vector2(random.randrange(0, bound[0]), random.randrange(0, bound[1]))
             mass = random.randrange(1, 10)
             if random.random() <= 0.5:
@@ -88,7 +88,9 @@ class World:
                 radius = random.randrange(1, 2)
                 body = flatBody.create_circle(pos, mass, radius, isStatic)
             flatBodies.append(body)
-        if num >= 1: self.controlBody = flatBodies[1]
+        if num >= 1: 
+            self.controlBody = flatBodies[1]
+            self.controlBody.IS_STATIC = False
 
     def control_body(self):
         #control the body
