@@ -2,6 +2,13 @@ from pygame import Vector2
 from flatBody import FlatBody, ShapeType, FlatAABB
 import math
 
+class CollideInfo:
+    def __init__(self, collide: Vector2, bodyA: FlatBody, bodyB: FlatBody, contactPoints: list) -> None:
+        self.collide = collide
+        self.bodyA = bodyA
+        self.bodyB = bodyB
+        self.contactPoints = contactPoints
+
 def _project_vertices(vertices:list, axis: Vector2) -> tuple:
     minVal = math.inf
     maxVal = -math.inf
@@ -21,6 +28,18 @@ def _project_circle(center: Vector2, radius:float, axis: Vector2):
         min,max = max, min
     return min, max
 
+def find_contact(bodyA:FlatBody, bodyB:FlatBody):
+    contact = Vector2()
+    if bodyA.shapeType == ShapeType.Box and bodyB.shapeType == ShapeType.Box:
+        contact = find_poly_contact_point(bodyA.get_transformedVertices(), bodyB.get_transformedVertices())
+    elif bodyA.shapeType == ShapeType.Circle and bodyB.shapeType == ShapeType.Circle:
+        contact = [find_circle_contact_point(bodyA.position, bodyB.position, bodyA.RADIUS)]
+    elif bodyA.shapeType == ShapeType.Box and bodyB.shapeType == ShapeType.Circle:
+        contact = [find_circle_poly_contact_point(bodyB.position, bodyA.get_transformedVertices())]
+    elif bodyB.shapeType == ShapeType.Box and bodyA.shapeType == ShapeType.Circle:
+        contact = [find_circle_poly_contact_point(bodyA.position, bodyB.get_transformedVertices())]
+    return contact
+                    
 def _closest_point_on_poly(center:Vector2, vertices:list):
     result = None
     minDis = math.inf
@@ -29,14 +48,80 @@ def _closest_point_on_poly(center:Vector2, vertices:list):
             result = vertex
     return result
 
+def point_edge_distance(point: Vector2, a: Vector2, b: Vector2):
+    ab = b-a
+    ap = point-a
+    proj = ap.dot(ab)
+    abLenSq = ab.magnitude_squared()
+
+    distance = proj/abLenSq
+    contact = None
+    if distance <= 0:
+        contact = a
+    elif distance >= 1:
+        contact = b
+    else:
+        contact = a + ab *distance
+    return (contact, (point-contact).magnitude_squared())
+        
+def find_poly_contact_point(verticesA: list, verticesB: list):
+
+    min_sqrt = math.inf
+    contact_points = list[Vector2()]
+    for i in range(len(verticesA)):
+        p = verticesA[i]
+        for j in range(len(verticesB)):
+            va = verticesB[j]
+            vb = verticesB[(j+1)%len(verticesB)]
+            contactInfo = point_edge_distance(p, va, vb)
+            
+            if round(min_sqrt,5) == round(contactInfo[1],5):
+                if contactInfo[0] != contact_points[0]:
+                    min_sqrt = contactInfo[1]
+                    contact_points.append(contactInfo[0])
+
+            elif min_sqrt > contactInfo[1]:
+                min_sqrt = contactInfo[1]
+                contact_points = [contactInfo[0]]
+    
+    for i in range(len(verticesB)):
+        p = verticesB[i]
+        for j in range(len(verticesA)):
+            va = verticesA[j]
+            vb = verticesA[(j+1)%len(verticesA)]
+            contactInfo = point_edge_distance(p, va, vb)
+            
+            if round(min_sqrt,5) == round(contactInfo[1],5):
+                if contactInfo[0] != contact_points[0]:
+                    min_sqrt = contactInfo[1]
+                    contact_points.append(contactInfo[0])
+
+            elif min_sqrt > contactInfo[1]:
+                min_sqrt = contactInfo[1]
+                contact_points = [contactInfo[0]]
+    return contact_points
+                    
+
+
 
 def find_circle_contact_point(centerA: Vector2, centerB: Vector2, radiusA: float):
     ab = centerB-centerA
+    if ab.magnitude == 0: return Vector2()
     dir = ab.normalize()
     return centerA + dir*radiusA
 
-def find_circle_poly_contact_point(centerA: Vector2, radiusA: float, vectices: list, polyPosition: Vector2):
-    pass
+def find_circle_poly_contact_point(centerA: Vector2, vertices: list):
+    min_sqr = math.inf
+    contact_point = Vector2()
+    for i in range(len(vertices)):
+        va = vertices[i]
+        vb = vertices[(i+1)%len(vertices)]
+        contactInfo = point_edge_distance(centerA, va, vb)
+        if contactInfo[1] < min_sqr:
+            min_sqr = contactInfo[1]
+            contact_point = contactInfo[0]
+    return contact_point
+
 
 def intersect_poly(verticesA:list, verticesB: list, centerA: Vector2, centerB:Vector2):
     normal = Vector2()
@@ -145,13 +230,68 @@ def intersect_circle(centerA: Vector2, radiusA: float, centerB: Vector2, radiusB
 
 
 def collideAABB(aabbA: FlatAABB, aabbB: FlatAABB):
-    if aabbA.maxX+aabbA.position.x <= aabbB.minX+aabbB.position.x or aabbB.maxX+aabbB.position.x <= aabbA.minX+aabbA.position.x:
+    if aabbA.maxX <= aabbB.minX or aabbB.maxX <= aabbA.minX:
         return False
-    if aabbA.maxY+aabbA.position.y <= aabbB.minY+aabbB.position.y or aabbB.maxY+aabbB.position.y <= aabbA.minY+aabbA.position.y:
+    if aabbA.maxY <= aabbB.minY or aabbB.maxY <= aabbA.minY:
         return False
     return True
+def resolve_collision_with_rotation(contactInfo: CollideInfo):
+    collide = contactInfo.collide
+    normal = collide.normalize()
+    bodyA = contactInfo.bodyA
+    bodyB = contactInfo.bodyB
+    contactPoints = contactInfo.contactPoints
+    e = min(bodyA.restitution, bodyB.restitution)
 
-def resolve_collision(collide:Vector2, bodyA:FlatBody, bodyB:FlatBody):
+    impluseList = []
+    radiusAList = []
+    radiusBList = []
+
+    for cp in contactPoints:
+        #the distance from the contact point to the center
+        ra = cp - bodyA.position
+        rb = cp - bodyB.position
+        
+        radiusAPerp = Vector2(-ra.y, ra.x)
+        radiusBPerp = Vector2(-rb.y, rb.x)
+
+        linearRotationVelocityA = radiusAPerp*bodyA.rotationalVelocity
+        linearRotationVelocityB = radiusBPerp*bodyB.rotationalVelocity
+
+        relativeVelocity = bodyB.velocity+linearRotationVelocityB - (bodyA.velocity + linearRotationVelocityA)
+
+        contactVelocityMag = relativeVelocity.dot(normal)
+
+        if contactVelocityMag > 0:
+            continue
+
+        raduisAPerpDotNormal = radiusAPerp.dot(normal)
+        raduisBPerpDotNormal = radiusBPerp.dot(normal)
+
+        denom = bodyA.INVERSE_MASS + bodyB.INVERSE_MASS + (raduisAPerpDotNormal**2) * bodyA.inverseInteria + (raduisBPerpDotNormal**2) * bodyB.inverseInteria
+        j = -(1+e)*contactVelocityMag
+        j /= denom
+        j /= len(contactPoints)
+        impluse = j * normal
+        impluseList.append(impluse)
+        radiusAList.append(ra)
+        radiusBList.append(rb)
+
+    if len(impluseList) >= 2:
+        pass
+    for i in range(len(impluseList)):
+        impluse = impluseList[i]
+        ra = radiusAList[i]
+        rb = radiusBList[i]
+        bodyA.velocity += -impluse * bodyA.INVERSE_MASS
+        bodyA.rotationalVelocity += -ra.cross(impluse) * bodyA.inverseInteria
+        bodyB.velocity += impluse * bodyB.INVERSE_MASS
+        bodyB.rotationalVelocity += rb.cross(impluse) * bodyB.inverseInteria
+
+def resolve_collision(collideInfo: CollideInfo):
+    bodyA = collideInfo.bodyA
+    bodyB = collideInfo.bodyB
+    collide = collideInfo.collide
     normal = collide.normalize()
     relativeVelocity = bodyB.velocity-bodyA.velocity
     

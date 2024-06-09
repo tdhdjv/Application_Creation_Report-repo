@@ -6,6 +6,7 @@ import math
 import time
 import camera
 from pygame import Vector2, SurfaceType
+from collision import CollideInfo
 from flatBody import ShapeType, FlatBody
 
 class World:
@@ -24,13 +25,25 @@ class World:
         self.FPS = 0
         self.tempFPS = 0
         self.previousTime = time.time()
-        ground  = flatBody.create_box(Vector2(self.bound.x/2, self.bound.y-1), 1, self.bound.x-10, 1, isStatic=True)
-        self.flatBodies = [self.controlBody, ground]
-        #self.create_randomBodies(10)
+        
+        self.collides = []
+        ground  = flatBody.create_box(Vector2(self.bound.x/2, self.bound.y-0.5), 1, self.bound.x-10, 1, isStatic=True)
+        wall1 = flatBody.create_box(Vector2(5, self.bound.y/2), 1, 1, self.bound.y, isStatic=True)
+        wall2 = flatBody.create_box(Vector2(self.bound.x-5, self.bound.y/2), 1, 1, self.bound.y, isStatic=True)
+        slope1 = flatBody.create_box(Vector2(12, self.bound.y-10), 1, 10, 1, isStatic=True)
+        slope2 = flatBody.create_box(Vector2(self.bound.x-10, self.bound.y-5), 1, 9, 1, isStatic=True)
+        slope1.rotate_body(math.pi/20)
+        slope2.rotate_body(-math.pi/10)
+        self.flatBodies = [self.controlBody,ground, slope1, slope2]
+        self.create_randomBodies(10)
 
     def render(self, display:SurfaceType):
         for body in self.flatBodies:
             body.render(display, self.pixelsPerMeter, self.camera)
+        for contactInfo in self.collides:
+            for points in contactInfo.contactPoints:
+                #self.render_point(display, points)
+                pass
 
     def player_input(self, tickPerSecond):
         keys = pygame.key.get_pressed()
@@ -38,11 +51,13 @@ class World:
         cameraMove = Vector2()
 
         if mouse[0] and not self.mousePrevious[0]:
-            body = flatBody.create_box(self.screen_to_world(Vector2(pygame.mouse.get_pos())), 1, 1, 1)
+            height = random.randrange(5, 40)/10
+            width = random.randrange(5, 40)/10
+            body = flatBody.create_box(self.screen_to_world(Vector2(pygame.mouse.get_pos())), width*height, height, width)
             self.flatBodies.append(body)
         if mouse[2] and not self.mousePrevious[2]:
             radius = random.randrange(5,20)/10
-            body = flatBody.create_circle(self.screen_to_world(Vector2(pygame.mouse.get_pos())), 1, radius)
+            body = flatBody.create_circle(self.screen_to_world(Vector2(pygame.mouse.get_pos())), radius**2, radius)
             self.flatBodies.append(body)    
         if keys[pygame.K_EQUALS]:
             self.zoom += 0.125/tickPerSecond
@@ -70,7 +85,7 @@ class World:
             self.previousTime = time.time()
             self.FPS = self.tempFPS
             self.tempFPS = 0
-        collides = []
+        self.collides = []
         for _ in range(subStep):
             for body in self.flatBodies:
                 body.physic_update(tickPerSecond*subStep, self.GRAVITY)
@@ -79,10 +94,10 @@ class World:
             flatBodies = self.flatBodies
             for i in range(len(flatBodies)-1):
                 bodyA = flatBodies[i]
-                aabbA = bodyA.aabb
+                aabbA = bodyA.get_transformedAABB()
                 for j in range(i+1, len(flatBodies)):
                     bodyB = flatBodies[j]
-                    aabbB = bodyB.aabb
+                    aabbB = bodyB.get_transformedAABB()
                     if not collision.collideAABB(aabbA, aabbB):
                         continue
                     if bodyA.IS_STATIC and bodyB.IS_STATIC:
@@ -98,12 +113,9 @@ class World:
                     else:
                         bodyA.push_body(-collide/2)
                         bodyB.push_body(collide/2)
-                    collides.append((collide, bodyA, bodyB))
-        for collideInfo in collides:
-            collide = collideInfo[0]
-            bodyA = collideInfo[1]
-            bodyB = collideInfo[2]
-            collision.resolve_collision(collide, bodyA, bodyB)
+                    self.collides.append(CollideInfo(collide, bodyA, bodyB, collision.find_contact(bodyA, bodyB)))
+        for collideInfo in self.collides:
+            collision.resolve_collision_with_rotation(collideInfo)
         
         for body in self.flatBodies:
             self.void_bodyPos(body)
@@ -158,3 +170,6 @@ class World:
     def debug(self):
         print(f"FPS: {self.FPS}")
         print(f"Body Count: {len(self.flatBodies)}")
+
+    def render_point(self, display: pygame.SurfaceType, point:Vector2):
+        pygame.draw.circle(display, 'red', point*self.pixelsPerMeter+self.camera.position, 4)

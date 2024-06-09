@@ -9,7 +9,7 @@ class Game:
         pygame.init()
         pygame.display.set_caption('physic engine')
         self.windowSize = (649, 480)
-        self.tickPerSecond = 30
+        self.tickPerSecond = 60
         self.subSteps = 10
         self.MAX_SUB_STEP = 10
         self.screen = pygame.display.set_mode(self.windowSize)

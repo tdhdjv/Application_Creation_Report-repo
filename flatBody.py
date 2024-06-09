@@ -31,10 +31,13 @@ class FlatBody:
         self.HEIGHT = height
 
         self.shapeType = shapeType
+        self.interia = self.calculate_rotational_inertia()
+        
+        if isStatic: self.inverseInteria = 0
+        else: self.inverseInteria = 1/self.interia
 
         if self.shapeType == ShapeType.Box:
             self.aabb = FlatAABB(-width/2, width/2, -height/2, height/2, position)
-            self.transformedAABB = self.aabb
             self.vertices = create_vectices(width, height)
             self._transformedVertices = self.vertices
             #the triangle indices has to be accending order!!!
@@ -45,6 +48,7 @@ class FlatBody:
             self._transformedVertices = []
             self.triangleIndices = []
         
+        self.transformedAABB = self.aabb
         self.transformUpdateNeeded = True
         if isStatic:
             self.color = 'brown'
@@ -55,7 +59,15 @@ class FlatBody:
     
     def get_transformedAABB(self):
         if self.transformUpdateNeeded:
-            self.transform_aabb()
+            if self.shapeType == ShapeType.Box: self.transform_aabb()
+            else : 
+                self.transformedAABB.minX = self.position.x-self.RADIUS
+                self.transformedAABB.maxX = self.position.x+self.RADIUS
+                self.transformedAABB.minY = self.position.y-self.RADIUS
+                self.transformedAABB.maxY = self.position.y+self.RADIUS
+                self.transformUpdateNeeded = False
+                
+            
         self.transformedAABB.position = self.position
         return self.transformedAABB
     
@@ -96,10 +108,16 @@ class FlatBody:
         if self.IS_STATIC: gravity = Vector2()
         accleration = self.force/self.MASS + gravity
         self.velocity += accleration/tickPerSec
+        if self.velocity.magnitude() < 0.01:self.velocity = Vector2(0,0)
         self.push_body(self.velocity/tickPerSec)
         self.rotate_body(self.rotationalVelocity/tickPerSec)
         self.force = Vector2()
-
+    
+    def calculate_rotational_inertia(self):
+        if self.shapeType == ShapeType.Circle:
+            return 0.5 * self.MASS * self.RADIUS * self.RADIUS
+        else:
+            return (1/12) *self.MASS * (self.WIDTH*self.WIDTH+self.HEIGHT*self.HEIGHT)
     def apply_force(self, amount: Vector2) -> None:
         self.force += amount
     def rotate_body(self, amount:float) -> None:
