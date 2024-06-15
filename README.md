@@ -7,7 +7,7 @@ YOU HAVE TO INSTALL PYGAME LIBRARY OR IT WON'T RUN!!!
 **What is this Project About?**:
 
 This project is an implementation of physics using python
-This project is heavely follows this project implemented in c# [https://github.com/twobitcoder101/FlatPhysics] 
+This project is heavely follows this project implemented in c# [https://github.com/twobitcoder101/FlatPhysics]
 and the video series tutorial that shows you how it was make this [https://youtu.be/lzI7QUyl66g?si=IwTMEEDTSy4p4mTL]
 
 **What this Project has**:
