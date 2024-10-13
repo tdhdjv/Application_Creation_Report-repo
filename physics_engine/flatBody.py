@@ -24,7 +24,7 @@ class FlatBody:
         if isStatic: self.INVERSE_MASS = 0
         else: self.INVERSE_MASS = 1/mass
         #restitution = relative speed after collision/relative speed before collision ie. bounciness
-        self.restitution = random.random()
+        self.restitution = 0
         
         self.RADIUS = radius
         self.WIDTH = width

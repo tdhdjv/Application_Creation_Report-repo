@@ -34,8 +34,8 @@ class World:
         slope2 = flatBody.create_box(Vector2(self.bound.x-10, self.bound.y-5), 1, 9, 1, isStatic=True)
         slope1.rotate_body(math.pi/20)
         slope2.rotate_body(-math.pi/10)
-        self.flatBodies = [self.controlBody,ground, slope1, slope2]
-        self.create_randomBodies(10)
+        self.flatBodies = [self.controlBody,ground]
+        #self.create_randomBodies(10)
 
     def render(self, display:SurfaceType):
         for body in self.flatBodies:
@@ -152,7 +152,7 @@ class World:
         if keys[pygame.K_d]:
             dir.x += 1
         
-        self.controlBody.apply_force(dir*100)
+        self.controlBody.apply_force(dir*self.controlBody.MASS*200)
     
     def void_bodyPos(self, body:FlatBody):
         if body.position.y > self.bound.y:

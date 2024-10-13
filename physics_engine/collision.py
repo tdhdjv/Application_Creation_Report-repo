@@ -277,8 +277,6 @@ def resolve_collision_with_rotation(contactInfo: CollideInfo):
         radiusAList.append(ra)
         radiusBList.append(rb)
 
-    if len(impluseList) >= 2:
-        pass
     for i in range(len(impluseList)):
         impluse = impluseList[i]
         ra = radiusAList[i]
